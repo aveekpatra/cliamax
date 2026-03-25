@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# lancedb local data
+/data/
+
+# clerk configuration (can include secrets)
+/.clerk/
