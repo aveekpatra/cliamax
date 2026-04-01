@@ -1,20 +1,34 @@
 "use client";
 
 import { motion } from "motion/react";
-import { Mic, History } from "lucide-react";
+import { Mic, History, Stethoscope } from "lucide-react";
 import { MicSelector } from "@/components/ui/mic-selector";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectPopup,
+  SelectItem,
+} from "@/components/ui/select";
+import { SPECIALTY_LABELS, type MedicalSpecialty } from "@/lib/medical-vocabulary";
 
 interface IdleScreenProps {
   selectedDeviceId: string;
+  selectedSpecialty: MedicalSpecialty;
   onStart: () => void;
   onDeviceChange: (deviceId: string) => void;
+  onSpecialtyChange: (specialty: MedicalSpecialty) => void;
   onShowHistory: () => void;
 }
 
+const specialtyEntries = Object.entries(SPECIALTY_LABELS) as [MedicalSpecialty, string][];
+
 export function IdleScreen({
   selectedDeviceId,
+  selectedSpecialty,
   onStart,
   onDeviceChange,
+  onSpecialtyChange,
   onShowHistory,
 }: IdleScreenProps) {
   return (
@@ -38,6 +52,34 @@ export function IdleScreen({
         >
           <Mic className="size-7" />
         </motion.button>
+
+        {/* Specialty selector */}
+        <motion.div
+          className="flex flex-col items-center gap-3"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.4 }}
+        >
+          <div className="flex items-center gap-2">
+            <Stethoscope className="size-3.5 text-muted-foreground/40" />
+            <span className="text-xs text-muted-foreground/50">Specializace</span>
+          </div>
+          <Select
+            value={selectedSpecialty}
+            onValueChange={(val) => onSpecialtyChange(val as MedicalSpecialty)}
+          >
+            <SelectTrigger className="min-w-[200px]">
+              <SelectValue placeholder="Vyberte specializaci" />
+            </SelectTrigger>
+            <SelectPopup>
+              {specialtyEntries.map(([key, label]) => (
+                <SelectItem key={key} value={key}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        </motion.div>
 
         {/* Mic selector */}
         <motion.div

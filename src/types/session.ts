@@ -12,10 +12,14 @@ export interface TranscriptEntry {
   timestamp: number;
   /** Word-level confidence scores from Deepgram */
   words?: WordConfidence[];
-  /** Whether LLM correction has been applied */
+  /** Whether the doctor accepted an LLM suggestion */
   corrected?: boolean;
-  /** Original text before LLM correction (for undo) */
+  /** Original text before accepting a suggestion (for undo) */
   originalText?: string;
+  /** LLM-suggested correction — shown inline, doctor must accept or dismiss */
+  suggestion?: string;
+  /** True while fetching an LLM suggestion for this entry */
+  loadingSuggestion?: boolean;
 }
 
 export type SessionStatus = "idle" | "recording" | "paused" | "completed";

@@ -8,7 +8,7 @@ import { TranscriptView } from "@/components/TranscriptView";
 import { NoteEditor } from "@/components/NoteEditor";
 import { BillingCodes } from "@/components/BillingCodes";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, RotateCcw } from "lucide-react";
+import { ArrowLeft, RotateCcw, RefreshCw } from "lucide-react";
 
 interface ReviewScreenProps {
   entries: TranscriptEntry[];
@@ -17,8 +17,12 @@ interface ReviewScreenProps {
   savedNote: string;
   savedTemplateId: string;
   savedBillingCodes: Array<{ code: string; name: string; points: number; reason: string }>;
+  isReprocessing?: boolean;
   onSaveNote: (note: string, templateId: string) => void;
   onSaveBillingCodes: (codes: Array<{ code: string; name: string; points: number; reason: string }>) => void;
+  onRequestSuggestion?: (entryId: string) => void;
+  onAcceptSuggestion?: (entryId: string) => void;
+  onDismissSuggestion?: (entryId: string) => void;
   onNewSession: () => void;
   onBackToList: () => void;
 }
@@ -29,8 +33,12 @@ export function ReviewScreen({
   savedNote,
   savedTemplateId,
   savedBillingCodes,
+  isReprocessing,
   onSaveNote,
   onSaveBillingCodes,
+  onRequestSuggestion,
+  onAcceptSuggestion,
+  onDismissSuggestion,
   onNewSession,
   onBackToList,
 }: ReviewScreenProps) {
@@ -58,13 +66,25 @@ export function ReviewScreen({
             <span className="text-xs font-medium text-muted-foreground/40 uppercase tracking-wider">
               Přepis
             </span>
+            {isReprocessing && (
+              <span className="flex items-center gap-1 text-[10px] text-info/60">
+                <RefreshCw className="size-2.5 animate-spin" />
+                Zpřesňování...
+              </span>
+            )}
             <span className="text-[10px] text-muted-foreground/30 tabular-nums ml-auto">
               {formatDuration(durationMs)}
             </span>
           </div>
           <ScrollArea className="flex-1" scrollFade>
             <div className="px-2 pb-4 text-[0.8rem] opacity-75">
-              <TranscriptView entries={entries} isRecording={false} />
+              <TranscriptView
+                entries={entries}
+                isRecording={false}
+                onRequestSuggestion={onRequestSuggestion}
+                onAcceptSuggestion={onAcceptSuggestion}
+                onDismissSuggestion={onDismissSuggestion}
+              />
             </div>
           </ScrollArea>
         </motion.div>

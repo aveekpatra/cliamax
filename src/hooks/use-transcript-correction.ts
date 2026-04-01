@@ -2,109 +2,89 @@
 
 import { useCallback, useRef } from "react";
 import type { TranscriptEntry } from "@/types/session";
+import type { MedicalSpecialty } from "@/lib/medical-vocabulary";
 
-const BATCH_SIZE = 5;
-const BATCH_DELAY_MS = 2000;
-const CONFIDENCE_THRESHOLD = 0.85;
+const CONFIDENCE_THRESHOLD = 0.70;
+
+// How many surrounding entries to send as context
+const CONTEXT_WINDOW = 3;
 
 interface UseTranscriptCorrectionOptions {
-  /** Called when entries are corrected — update your state */
-  onCorrected: (corrections: Array<{ id: string; correctedText: string }>) => void;
+  /** Access to all current entries for context */
+  getEntries: () => TranscriptEntry[];
+  /** Medical specialty for vocabulary context */
+  specialty?: MedicalSpecialty;
 }
 
 /**
- * Batches uncorrected transcript entries and sends them to the LLM
- * for medical terminology correction. Only sends entries that have
- * at least one low-confidence word.
+ * On-demand transcript correction. The doctor clicks a low-confidence
+ * segment, we call the LLM for that single entry with surrounding
+ * context, and return a suggestion.
  */
-export function useTranscriptCorrection({ onCorrected }: UseTranscriptCorrectionOptions) {
-  const pendingRef = useRef<TranscriptEntry[]>([]);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inflightRef = useRef(false);
-
-  const flush = useCallback(async () => {
-    if (inflightRef.current || pendingRef.current.length === 0) return;
-
-    inflightRef.current = true;
-    const batch = pendingRef.current.splice(0, BATCH_SIZE);
-
-    try {
-      const res = await fetch("/api/ai/correct-transcript", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          entries: batch.map((e) => ({
-            id: e.id,
-            speaker: e.speaker,
-            text: e.text,
-          })),
-        }),
-      });
-
-      if (res.ok) {
-        const { corrections } = await res.json();
-        if (corrections && corrections.length > 0) {
-          // Only pass through corrections that actually changed the text
-          const realCorrections = corrections.filter(
-            (c: { id: string; correctedText: string }) => {
-              const original = batch.find((e) => e.id === c.id);
-              return original && c.correctedText !== original.text;
-            }
-          );
-          if (realCorrections.length > 0) {
-            onCorrected(realCorrections);
-          }
-        }
-      }
-    } catch {
-      // Silent failure — transcript stays as-is, doctor can still see confidence highlights
-    } finally {
-      inflightRef.current = false;
-      // If more entries queued, flush again
-      if (pendingRef.current.length > 0) {
-        flush();
-      }
-    }
-  }, [onCorrected]);
-
-  const scheduleFlush = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      flush();
-    }, BATCH_DELAY_MS);
-  }, [flush]);
+export function useTranscriptCorrection({
+  getEntries,
+  specialty = "general",
+}: UseTranscriptCorrectionOptions) {
+  const specialtyRef = useRef(specialty);
+  specialtyRef.current = specialty;
 
   /**
-   * Enqueue an entry for correction. Only entries with low-confidence
-   * words are actually sent to the LLM — high-confidence entries are skipped.
+   * Request a correction for a single entry. Returns the suggested text,
+   * or null if no correction was produced / the LLM returned the same text.
    */
-  const enqueue = useCallback(
-    (entry: TranscriptEntry) => {
-      // Check if any word is below confidence threshold
-      const hasLowConfidence = entry.words?.some(
-        (w) => w.confidence < CONFIDENCE_THRESHOLD
-      );
+  const requestCorrection = useCallback(
+    async (entryId: string): Promise<string | null> => {
+      const allEntries = getEntries();
+      const entry = allEntries.find((e) => e.id === entryId);
+      if (!entry) return null;
 
-      if (!hasLowConfidence) return; // Skip — Deepgram was confident enough
+      // Gather surrounding context
+      const idx = allEntries.indexOf(entry);
+      const contextEntries: Array<{ id: string; speaker: string; text: string }> = [];
+      for (
+        let i = Math.max(0, idx - CONTEXT_WINDOW);
+        i <= Math.min(allEntries.length - 1, idx + CONTEXT_WINDOW);
+        i++
+      ) {
+        if (allEntries[i].id !== entryId) {
+          contextEntries.push({
+            id: allEntries[i].id,
+            speaker: allEntries[i].speaker,
+            text: allEntries[i].text,
+          });
+        }
+      }
 
-      pendingRef.current.push(entry);
+      try {
+        const res = await fetch("/api/ai/correct-transcript", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            entries: [{ id: entry.id, speaker: entry.speaker, text: entry.text }],
+            context: contextEntries,
+            specialty: specialtyRef.current,
+          }),
+        });
 
-      if (pendingRef.current.length >= BATCH_SIZE) {
-        flush();
-      } else {
-        scheduleFlush();
+        if (!res.ok) return null;
+
+        const { corrections } = await res.json();
+        if (!corrections || corrections.length === 0) return null;
+
+        const correction = corrections[0];
+        // Only return if the LLM actually changed something
+        if (correction.correctedText && correction.correctedText !== entry.text) {
+          return correction.correctedText;
+        }
+        return null;
+      } catch {
+        return null;
       }
     },
-    [flush, scheduleFlush]
+    [getEntries]
   );
 
-  /** Force flush any remaining entries (call on session stop) */
-  const flushRemaining = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    flush();
-  }, [flush]);
-
-  return { enqueue, flushRemaining };
+  return { requestCorrection };
 }
 
 export { CONFIDENCE_THRESHOLD };

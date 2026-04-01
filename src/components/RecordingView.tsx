@@ -11,11 +11,16 @@ interface RecordingViewProps {
   entries: TranscriptEntry[];
   selectedDeviceId: string;
   startedAt: number | null;
+  interimText?: string;
+  interimSpeaker?: "doctor" | "patient";
   onPause: () => void;
   onResume: () => void;
   onStop: () => void;
   onNewSession: () => void;
   onDeviceChange: (deviceId: string) => void;
+  onRequestSuggestion?: (entryId: string) => void;
+  onAcceptSuggestion?: (entryId: string) => void;
+  onDismissSuggestion?: (entryId: string) => void;
   sidebarTrigger?: React.ReactNode;
 }
 
@@ -23,10 +28,15 @@ export function RecordingView({
   status,
   entries,
   selectedDeviceId,
+  interimText,
+  interimSpeaker,
   onPause,
   onResume,
   onStop,
   onDeviceChange,
+  onRequestSuggestion,
+  onAcceptSuggestion,
+  onDismissSuggestion,
 }: RecordingViewProps) {
   return (
     <motion.div
@@ -70,6 +80,11 @@ export function RecordingView({
           <TranscriptView
             entries={entries}
             isRecording={status === "recording"}
+            interimText={interimText}
+            interimSpeaker={interimSpeaker}
+            onRequestSuggestion={onRequestSuggestion}
+            onAcceptSuggestion={onAcceptSuggestion}
+            onDismissSuggestion={onDismissSuggestion}
           />
         </ScrollArea>
       </div>

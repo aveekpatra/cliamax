@@ -4,10 +4,11 @@ import { useCallback, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import type { TranscriptEntry, SessionStatus } from "@/types/session";
+import type { TranscriptEntry, SessionStatus, WordConfidence } from "@/types/session";
 import { useAudioRecorder } from "@/hooks/use-audio-recorder";
-import { useDeepgram } from "@/hooks/use-deepgram";
+import { useElevenLabsScribe } from "@/hooks/use-elevenlabs-scribe";
 import { useTranscriptCorrection } from "@/hooks/use-transcript-correction";
+import { type MedicalSpecialty } from "@/lib/medical-vocabulary";
 import { NavBar } from "@/components/NavBar";
 import { SessionsList } from "@/components/SessionsList";
 import { IdleScreen } from "@/components/IdleScreen";
@@ -22,11 +23,16 @@ export function SessionContainer() {
   const [status, setStatus] = useState<SessionStatus>("idle");
   const [entries, setEntries] = useState<TranscriptEntry[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
+  const [selectedSpecialty, setSelectedSpecialty] = useState<MedicalSpecialty>("general");
   const [sessionId, setSessionId] = useState<Id<"sessions"> | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [interimText, setInterimText] = useState("");
+  const [interimSpeaker, setInterimSpeaker] = useState<"doctor" | "patient">("doctor");
+  const [isReprocessing, setIsReprocessing] = useState(false);
 
   const entriesBufferRef = useRef<TranscriptEntry[]>([]);
   const flushIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const entriesRef = useRef<TranscriptEntry[]>([]);
 
   const createSession = useMutation(api.sessions.create);
   const appendTranscript = useMutation(api.sessions.appendTranscript);
@@ -41,44 +47,94 @@ export function SessionContainer() {
     sessionId && view === "review" && status === "completed" ? { id: sessionId } : "skip"
   );
 
-  // --- LLM correction layer ---
-  const handleCorrected = useCallback(
-    (corrections: Array<{ id: string; correctedText: string }>) => {
-      setEntries((prev) =>
-        prev.map((entry) => {
-          const correction = corrections.find((c) => c.id === entry.id);
-          if (!correction) return entry;
-          return {
-            ...entry,
-            originalText: entry.text,
-            text: correction.correctedText,
-            corrected: true,
-          };
-        })
-      );
+  // --- On-demand LLM suggestion (doctor clicks to request) ---
+  const getEntries = useCallback(() => entriesRef.current, []);
+
+  const { requestCorrection } = useTranscriptCorrection({
+    getEntries,
+    specialty: selectedSpecialty,
+  });
+
+  const handleRequestSuggestion = useCallback(
+    async (entryId: string) => {
+      setEntries((prev) => {
+        const updated = prev.map((e) =>
+          e.id === entryId ? { ...e, loadingSuggestion: true } : e
+        );
+        entriesRef.current = updated;
+        return updated;
+      });
+
+      const suggestedText = await requestCorrection(entryId);
+
+      setEntries((prev) => {
+        const updated = prev.map((e) => {
+          if (e.id !== entryId) return e;
+          if (suggestedText) {
+            return { ...e, loadingSuggestion: false, suggestion: suggestedText };
+          }
+          return { ...e, loadingSuggestion: false };
+        });
+        entriesRef.current = updated;
+        return updated;
+      });
+    },
+    [requestCorrection]
+  );
+
+  const handleAcceptSuggestion = useCallback((entryId: string) => {
+    setEntries((prev) => {
+      const updated = prev.map((entry) => {
+        if (entry.id !== entryId || !entry.suggestion) return entry;
+        return {
+          ...entry,
+          originalText: entry.text,
+          text: entry.suggestion,
+          suggestion: undefined,
+          corrected: true,
+        };
+      });
+      entriesRef.current = updated;
+      return updated;
+    });
+  }, []);
+
+  const handleDismissSuggestion = useCallback((entryId: string) => {
+    setEntries((prev) => {
+      const updated = prev.map((entry) => {
+        if (entry.id !== entryId) return entry;
+        return { ...entry, suggestion: undefined };
+      });
+      entriesRef.current = updated;
+      return updated;
+    });
+  }, []);
+
+  const handleTranscript = useCallback(
+    (entry: TranscriptEntry) => {
+      setEntries((prev) => {
+        const updated = [...prev, entry];
+        entriesRef.current = updated;
+        return updated;
+      });
+      entriesBufferRef.current.push(entry);
     },
     []
   );
 
-  const { enqueue: enqueueCorrection, flushRemaining: flushCorrections } =
-    useTranscriptCorrection({ onCorrected: handleCorrected });
+  const handleInterim = useCallback((text: string, speaker: "doctor" | "patient") => {
+    setInterimText(text);
+    setInterimSpeaker(speaker);
+  }, []);
 
-  const handleTranscript = useCallback(
-    (entry: TranscriptEntry) => {
-      setEntries((prev) => [...prev, entry]);
-      entriesBufferRef.current.push(entry);
-      // Send to LLM correction if it has low-confidence words
-      enqueueCorrection(entry);
-    },
-    [enqueueCorrection]
-  );
-
-  const { connect, disconnect, sendAudio } = useDeepgram({
-    language: "cs",
+  // --- ElevenLabs Scribe v2 Realtime ---
+  const { connect, disconnect, sendAudio } = useElevenLabsScribe({
+    language: "ces",
     onTranscript: handleTranscript,
+    onInterim: handleInterim,
   });
 
-  const { start: startRecording, stop: stopRecording, pause, resume } =
+  const { start: startRecording, stop: stopRecording, pause, resume, getRecording } =
     useAudioRecorder({
       deviceId: selectedDeviceId || undefined,
       sampleRate: 16000,
@@ -118,14 +174,66 @@ export function SessionContainer() {
     [appendTranscript]
   );
 
+  // --- Scribe v2 Batch reprocessing (post-recording accuracy pass) ---
+  const runScribeBatch = useCallback(async () => {
+    const audioBlob = getRecording();
+    if (!audioBlob) return;
+
+    setIsReprocessing(true);
+    try {
+      const formData = new FormData();
+      formData.append("audio", audioBlob, "recording.wav");
+      formData.append("specialty", selectedSpecialty);
+
+      const res = await fetch("/api/ai/scribe-batch", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) return;
+
+      const data = await res.json();
+      if (data.skipped || !data.entries || data.entries.length === 0) return;
+
+      // Replace realtime transcript with batch result (more accurate)
+      setEntries(() => {
+        const batchEntries: TranscriptEntry[] = data.entries.map(
+          (
+            e: {
+              speaker: "doctor" | "patient";
+              text: string;
+              words: Array<{ word: string; confidence: number; start: number; end: number }>;
+            },
+            i: number
+          ) => ({
+            id: `batch-${Date.now()}-${i}`,
+            speaker: e.speaker,
+            text: e.text,
+            timestamp: Date.now(),
+            words: e.words as WordConfidence[],
+            corrected: false,
+          })
+        );
+        entriesRef.current = batchEntries;
+        return batchEntries;
+      });
+    } catch {
+      // Silent — realtime transcript is still available
+    } finally {
+      setIsReprocessing(false);
+    }
+  }, [getRecording, selectedSpecialty]);
+
   // --- Navigation ---
 
   const handleNewSession = useCallback(() => {
     setView("idle");
     setStatus("idle");
     setEntries([]);
+    entriesRef.current = [];
     setSessionId(null);
     setStartedAt(null);
+    setInterimText("");
   }, []);
 
   const handleOpenSession = useCallback(
@@ -141,6 +249,7 @@ export function SessionContainer() {
     setView("list");
     setStatus("idle");
     setEntries([]);
+    entriesRef.current = [];
     setSessionId(null);
     setStartedAt(null);
   }, []);
@@ -149,7 +258,9 @@ export function SessionContainer() {
 
   const handleStart = useCallback(async () => {
     setEntries([]);
+    entriesRef.current = [];
     setStartedAt(Date.now());
+    setInterimText("");
 
     const id = await createSession({
       title: `Relace ${new Date().toLocaleString("cs-CZ")}`,
@@ -166,7 +277,7 @@ export function SessionContainer() {
   const handleStop = useCallback(async () => {
     stopRecording();
     disconnect();
-    flushCorrections(); // Flush any remaining LLM corrections
+    setInterimText("");
 
     const durationMs = startedAt ? Date.now() - startedAt : 0;
 
@@ -177,7 +288,10 @@ export function SessionContainer() {
 
     setStatus("completed");
     setView("review");
-  }, [stopRecording, disconnect, flushCorrections, sessionId, startedAt, stopFlushing, completeSession]);
+
+    // Fire Scribe v2 Batch in the background (non-blocking)
+    runScribeBatch();
+  }, [stopRecording, disconnect, sessionId, startedAt, stopFlushing, completeSession, runScribeBatch]);
 
   const handlePause = useCallback(() => {
     pause();
@@ -238,8 +352,10 @@ export function SessionContainer() {
             <IdleScreen
               key="idle"
               selectedDeviceId={selectedDeviceId}
+              selectedSpecialty={selectedSpecialty}
               onStart={handleStart}
               onDeviceChange={setSelectedDeviceId}
+              onSpecialtyChange={setSelectedSpecialty}
               onShowHistory={() => setView("list")}
             />
           )}
@@ -251,11 +367,16 @@ export function SessionContainer() {
               entries={entries}
               selectedDeviceId={selectedDeviceId}
               startedAt={startedAt}
+              interimText={interimText}
+              interimSpeaker={interimSpeaker}
               onPause={handlePause}
               onResume={handleResume}
               onStop={handleStop}
               onNewSession={handleBackToList}
               onDeviceChange={setSelectedDeviceId}
+              onRequestSuggestion={handleRequestSuggestion}
+              onAcceptSuggestion={handleAcceptSuggestion}
+              onDismissSuggestion={handleDismissSuggestion}
             />
           )}
 
@@ -268,8 +389,12 @@ export function SessionContainer() {
               savedNote={savedSession?.note || ""}
               savedTemplateId={savedSession?.noteTemplateId || "soap"}
               savedBillingCodes={savedSession?.billingCodes || []}
+              isReprocessing={isReprocessing}
               onSaveNote={handleSaveNote}
               onSaveBillingCodes={handleSaveBillingCodes}
+              onRequestSuggestion={handleRequestSuggestion}
+              onAcceptSuggestion={handleAcceptSuggestion}
+              onDismissSuggestion={handleDismissSuggestion}
               onNewSession={handleNewSession}
               onBackToList={handleBackToList}
             />

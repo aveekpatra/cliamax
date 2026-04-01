@@ -1,9 +1,14 @@
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MODEL = "openai/gpt-5.4-mini";
+const MODEL = "openai/gpt-4.1-mini";
 
 interface Message {
   role: "system" | "user" | "assistant";
   content: string;
+}
+
+interface ChatOptions {
+  temperature?: number;
+  model?: string;
 }
 
 interface OpenRouterResponse {
@@ -14,7 +19,10 @@ interface OpenRouterResponse {
   }>;
 }
 
-export async function chat(messages: Message[]): Promise<string> {
+export async function chat(
+  messages: Message[],
+  options: ChatOptions = {}
+): Promise<string> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error("OPENROUTER_API_KEY not configured");
@@ -29,8 +37,9 @@ export async function chat(messages: Message[]): Promise<string> {
       "X-OpenRouter-Title": "Claimax Medical Transcription",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model: options.model || MODEL,
       messages,
+      ...(options.temperature !== undefined && { temperature: options.temperature }),
     }),
   });
 
