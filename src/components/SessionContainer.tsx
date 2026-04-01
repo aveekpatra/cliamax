@@ -36,6 +36,7 @@ export function SessionContainer() {
 
   const createSession = useMutation(api.sessions.create);
   const appendTranscript = useMutation(api.sessions.appendTranscript);
+  const replaceTranscript = useMutation(api.sessions.replaceTranscript);
   const completeSession = useMutation(api.sessions.complete);
   const updateStatus = useMutation(api.sessions.updateStatus);
   const saveNote = useMutation(api.sessions.saveNote);
@@ -141,13 +142,17 @@ export function SessionContainer() {
       onAudioData: sendAudio,
     });
 
+  /** Strip entries to only the fields Convex schema accepts */
+  const toConvexEntries = (entries: TranscriptEntry[]) =>
+    entries.map((e) => ({ id: e.id, speaker: e.speaker, text: e.text, timestamp: e.timestamp }));
+
   const startFlushing = useCallback(
     (id: Id<"sessions">) => {
       flushIntervalRef.current = setInterval(async () => {
         if (entriesBufferRef.current.length === 0) return;
         const batch = entriesBufferRef.current.splice(0);
         try {
-          await appendTranscript({ id, entries: batch });
+          await appendTranscript({ id, entries: toConvexEntries(batch) });
         } catch {
           entriesBufferRef.current.unshift(...batch);
         }
@@ -165,7 +170,7 @@ export function SessionContainer() {
       if (entriesBufferRef.current.length > 0) {
         const batch = entriesBufferRef.current.splice(0);
         try {
-          await appendTranscript({ id, entries: batch });
+          await appendTranscript({ id, entries: toConvexEntries(batch) });
         } catch {
           // silent
         }
@@ -196,33 +201,45 @@ export function SessionContainer() {
       if (data.skipped || !data.entries || data.entries.length === 0) return;
 
       // Replace realtime transcript with batch result (more accurate)
-      setEntries(() => {
-        const batchEntries: TranscriptEntry[] = data.entries.map(
-          (
-            e: {
-              speaker: "doctor" | "patient";
-              text: string;
-              words: Array<{ word: string; confidence: number; start: number; end: number }>;
-            },
-            i: number
-          ) => ({
-            id: `batch-${Date.now()}-${i}`,
-            speaker: e.speaker,
-            text: e.text,
-            timestamp: Date.now(),
-            words: e.words as WordConfidence[],
-            corrected: false,
-          })
-        );
-        entriesRef.current = batchEntries;
-        return batchEntries;
-      });
+      const now = Date.now();
+      const batchEntries: TranscriptEntry[] = data.entries.map(
+        (
+          e: {
+            speaker: "doctor" | "patient";
+            text: string;
+            words: Array<{ word: string; confidence: number; start: number; end: number }>;
+          },
+          i: number
+        ) => ({
+          id: `batch-${now}-${i}`,
+          speaker: e.speaker,
+          text: e.text,
+          timestamp: now,
+          words: e.words as WordConfidence[],
+          corrected: false,
+        })
+      );
+
+      setEntries(batchEntries);
+      entriesRef.current = batchEntries;
+
+      // Persist the batch result to Convex
+      if (sessionId) {
+        try {
+          await replaceTranscript({
+            id: sessionId,
+            entries: toConvexEntries(batchEntries),
+          });
+        } catch {
+          // Silent — UI still has the batch result
+        }
+      }
     } catch {
       // Silent — realtime transcript is still available
     } finally {
       setIsReprocessing(false);
     }
-  }, [getRecording, selectedSpecialty]);
+  }, [getRecording, selectedSpecialty, sessionId, replaceTranscript]);
 
   // --- Navigation ---
 
@@ -387,7 +404,7 @@ export function SessionContainer() {
               startedAt={resolvedStartedAt}
               durationMs={resolvedDurationMs}
               savedNote={savedSession?.note || ""}
-              savedTemplateId={savedSession?.noteTemplateId || "soap"}
+              savedTemplateId={savedSession?.noteTemplateId || "summary"}
               savedBillingCodes={savedSession?.billingCodes || []}
               isReprocessing={isReprocessing}
               onSaveNote={handleSaveNote}

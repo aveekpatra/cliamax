@@ -51,6 +51,23 @@ export const appendTranscript = mutation({
   },
 });
 
+export const replaceTranscript = mutation({
+  args: {
+    id: v.id("sessions"),
+    entries: v.array(
+      v.object({
+        id: v.string(),
+        speaker: v.string(),
+        text: v.string(),
+        timestamp: v.number(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, { transcript: args.entries });
+  },
+});
+
 export const updateStatus = mutation({
   args: {
     id: v.id("sessions"),

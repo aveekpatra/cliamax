@@ -157,19 +157,11 @@ export function useElevenLabsScribe({
             }
 
             case "committed_transcript": {
-              // Final text without timestamps (fallback)
+              // When include_timestamps=true, the server sends BOTH
+              // committed_transcript and committed_transcript_with_timestamps.
+              // We only process the timestamps version to avoid duplicates.
+              // Just clear interim text here.
               onInterimRef.current?.("", "doctor");
-              if (msg.text?.trim()) {
-                const entry: TranscriptEntry = {
-                  id: `entry-${Date.now()}-${entryCounterRef.current++}`,
-                  speaker: "doctor",
-                  text: msg.text.trim(),
-                  timestamp: Date.now(),
-                  words: [],
-                  corrected: false,
-                };
-                onTranscriptRef.current?.(entry);
-              }
               break;
             }
 
