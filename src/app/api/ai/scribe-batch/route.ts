@@ -75,7 +75,18 @@ export async function POST(request: Request) {
       return Response.json({ skipped: true, reason: "No words in transcript" });
     }
 
-    // Group words by speaker into entries
+    // First-speaker heuristic: in a typical clinic visit the doctor opens
+    // ("Dobrý den, co vás přivádí?"). Walk the words once to find which
+    // speaker_id appears first chronologically, treat that one as the doctor,
+    // and any other speaker_ids as the patient. Falls back gracefully when
+    // there's only a single speaker (dictation) or speaker_id is missing.
+    const seenOrder: string[] = [];
+    for (const w of textWords) {
+      const spk = w.speaker_id ?? "speaker_0";
+      if (!seenOrder.includes(spk)) seenOrder.push(spk);
+    }
+    const doctorSpeakerId = seenOrder[0];
+
     const entries: Array<{
       speaker: "doctor" | "patient";
       text: string;
@@ -88,7 +99,7 @@ export async function POST(request: Request) {
     const flushGroup = () => {
       if (currentWords.length === 0) return;
       entries.push({
-        speaker: currentSpeaker === "speaker_0" ? "doctor" : "patient",
+        speaker: currentSpeaker === doctorSpeakerId ? "doctor" : "patient",
         text: currentWords.map((w) => w.text).join(" "),
         words: currentWords.map((w) => ({
           word: w.text,

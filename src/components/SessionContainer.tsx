@@ -18,6 +18,7 @@ import { DashboardView } from "@/components/app/DashboardView";
 import { PatientsView } from "@/components/app/PatientsView";
 import { PatientDetailView } from "@/components/app/PatientDetailView";
 import { SessionsListView } from "@/components/app/SessionsListView";
+import { TemplatesView } from "@/components/app/TemplatesView";
 import { CommandPalette } from "@/components/app/CommandPalette";
 import { PatientFormDialog } from "@/components/app/PatientFormDialog";
 import type {
@@ -73,6 +74,8 @@ export function SessionContainer({
   const saveBillingCodes = useMutation(api.sessions.saveBillingCodes);
   const linkPatient = useMutation(api.sessions.linkPatient);
   const setReviewStatusMut = useMutation(api.sessions.setReviewStatus);
+  const toggleEntrySpeakerMut = useMutation(api.sessions.toggleEntrySpeaker);
+  const swapAllSpeakersMut = useMutation(api.sessions.swapAllSpeakers);
   const createPatient = useMutation(api.patients.create);
 
   const savedSession = useQuery(
@@ -129,6 +132,11 @@ export function SessionContainer({
 
     if (parsed.kind === "sessions") {
       setView("sessions");
+      return;
+    }
+
+    if (parsed.kind === "templates") {
+      setView("templates");
       return;
     }
 
@@ -423,6 +431,60 @@ export function SessionContainer({
     [sessionId, setReviewStatusMut]
   );
 
+  // Manual diarization correction.
+  //
+  // Two cases:
+  //   1. Saved session being reviewed (entries.length === 0, display reads
+  //      from savedSession via Convex query) — fire the mutation; the query
+  //      subscription pushes the updated transcript back automatically.
+  //   2. Live / in-progress session (entries populated locally) — flip in
+  //      local state for instant feedback. If a sessionId exists, also fire
+  //      the mutation so the change persists.
+  const handleToggleSpeaker = useCallback(
+    (entryId: string) => {
+      const isSavedReview = entries.length === 0 && !!sessionId;
+      if (!isSavedReview) {
+        setEntries((prev) => {
+          const updated = prev.map((e) =>
+            e.id === entryId
+              ? {
+                  ...e,
+                  speaker: (e.speaker === "doctor" ? "patient" : "doctor") as
+                    | "doctor"
+                    | "patient",
+                }
+              : e
+          );
+          entriesRef.current = updated;
+          return updated;
+        });
+      }
+      if (sessionId) {
+        void toggleEntrySpeakerMut({ id: sessionId, entryId });
+      }
+    },
+    [sessionId, entries.length, toggleEntrySpeakerMut]
+  );
+
+  const handleSwapAllSpeakers = useCallback(() => {
+    const isSavedReview = entries.length === 0 && !!sessionId;
+    if (!isSavedReview) {
+      setEntries((prev) => {
+        const updated = prev.map((e) => ({
+          ...e,
+          speaker: (e.speaker === "doctor" ? "patient" : "doctor") as
+            | "doctor"
+            | "patient",
+        }));
+        entriesRef.current = updated;
+        return updated;
+      });
+    }
+    if (sessionId) {
+      void swapAllSpeakersMut({ id: sessionId });
+    }
+  }, [sessionId, entries.length, swapAllSpeakersMut]);
+
   const handleBackToDashboard = useCallback(() => {
     setSessionId(null);
     setEntries([]);
@@ -540,6 +602,8 @@ export function SessionContainer({
         />
       )}
 
+      {view === "templates" && <TemplatesView key="templates" />}
+
       {view === "review" && (
         <ReviewScreen
           key={`review-${sessionId}`}
@@ -558,6 +622,8 @@ export function SessionContainer({
           onRequestSuggestion={handleRequestSuggestion}
           onAcceptSuggestion={handleAcceptSuggestion}
           onDismissSuggestion={handleDismissSuggestion}
+          onToggleSpeaker={handleToggleSpeaker}
+          onSwapAllSpeakers={handleSwapAllSpeakers}
           onLinkPatient={handleLinkPatientInReview}
           onChangeReviewStatus={handleChangeReviewStatus}
           onNewSession={() => handleNewSession(resolvedPatientId ?? null)}
@@ -595,7 +661,8 @@ type ParsedPath =
   | { kind: "newSession"; sessionId: null; patientId: null }
   | { kind: "review"; sessionId: SessionId; patientId: null }
   | { kind: "patients"; sessionId: null; patientId: null }
-  | { kind: "patient"; sessionId: null; patientId: PatientId };
+  | { kind: "patient"; sessionId: null; patientId: PatientId }
+  | { kind: "templates"; sessionId: null; patientId: null };
 
 function parsePath(pathname: string): ParsedPath {
   const parts = pathname.split("/").filter(Boolean);
@@ -625,6 +692,9 @@ function parsePath(pathname: string): ParsedPath {
     }
     return { kind: "patients", sessionId: null, patientId: null };
   }
+  if (parts[0] === "templates") {
+    return { kind: "templates", sessionId: null, patientId: null };
+  }
   return { kind: "dashboard", sessionId: null, patientId: null };
 }
 
@@ -643,6 +713,8 @@ function initialViewFromPath(pathname: string): AppView {
       return "patients";
     case "patient":
       return "patient";
+    case "templates":
+      return "templates";
   }
 }
 
@@ -654,6 +726,8 @@ function pathFor(view: AppView): string {
       return "/sessions";
     case "patients":
       return "/patients";
+    case "templates":
+      return "/templates";
     case "idle":
     case "recording":
       return "/sessions/new";

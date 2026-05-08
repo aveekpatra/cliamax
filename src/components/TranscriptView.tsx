@@ -23,6 +23,8 @@ interface TranscriptViewProps {
   onRequestSuggestion?: (entryId: string) => void;
   onAcceptSuggestion?: (entryId: string) => void;
   onDismissSuggestion?: (entryId: string) => void;
+  /** Flip the speaker on a single entry (manual diarization correction) */
+  onToggleSpeaker?: (entryId: string) => void;
 }
 
 export function TranscriptView({
@@ -33,6 +35,7 @@ export function TranscriptView({
   onRequestSuggestion,
   onAcceptSuggestion,
   onDismissSuggestion,
+  onToggleSpeaker,
 }: TranscriptViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -80,15 +83,30 @@ export function TranscriptView({
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <span
-                    className={`text-xs font-medium tracking-wide uppercase ${
-                      isDoctor
-                        ? "text-foreground/40"
-                        : "text-info-foreground/50"
-                    }`}
-                  >
-                    {isDoctor ? "Lékař" : "Pacient"}
-                  </span>
+                  {onToggleSpeaker ? (
+                    <button
+                      type="button"
+                      onClick={() => onToggleSpeaker(entry.id)}
+                      title="Prohodit roli (Lékař ↔ Pacient)"
+                      className={`text-xs font-medium tracking-wide uppercase rounded px-1 -mx-1 cursor-pointer transition-colors hover:bg-accent ${
+                        isDoctor
+                          ? "text-foreground/40 hover:text-foreground/80"
+                          : "text-info-foreground/50 hover:text-info-foreground/80"
+                      }`}
+                    >
+                      {isDoctor ? "Lékař" : "Pacient"}
+                    </button>
+                  ) : (
+                    <span
+                      className={`text-xs font-medium tracking-wide uppercase ${
+                        isDoctor
+                          ? "text-foreground/40"
+                          : "text-info-foreground/50"
+                      }`}
+                    >
+                      {isDoctor ? "Lékař" : "Pacient"}
+                    </span>
+                  )}
                 </motion.div>
               )}
               <div

@@ -12,6 +12,7 @@ import { BillingCodes } from "@/components/BillingCodes";
 import { Popover, PopoverTrigger, PopoverPopup } from "@/components/ui/popover";
 import {
   ArrowLeft,
+  ArrowLeftRight,
   RotateCcw,
   RefreshCw,
   Check,
@@ -42,6 +43,8 @@ interface ReviewScreenProps {
   onRequestSuggestion?: (entryId: string) => void;
   onAcceptSuggestion?: (entryId: string) => void;
   onDismissSuggestion?: (entryId: string) => void;
+  onToggleSpeaker?: (entryId: string) => void;
+  onSwapAllSpeakers?: () => void;
   onLinkPatient: (id: PatientId | null) => void;
   onChangeReviewStatus: (status: ReviewStatus) => void;
   onNewSession: () => void;
@@ -63,6 +66,8 @@ export function ReviewScreen({
   onRequestSuggestion,
   onAcceptSuggestion,
   onDismissSuggestion,
+  onToggleSpeaker,
+  onSwapAllSpeakers,
   onLinkPatient,
   onChangeReviewStatus,
   onNewSession,
@@ -89,9 +94,21 @@ export function ReviewScreen({
                 Zpřesňování…
               </span>
             )}
-            <span className="text-[10px] text-muted-foreground/60 tabular-nums ml-auto">
-              {formatDuration(durationMs)}
-            </span>
+            <div className="ml-auto flex items-center gap-2">
+              {onSwapAllSpeakers && entries.length > 0 && (
+                <Button
+                  onClick={onSwapAllSpeakers}
+                  size="icon-xs"
+                  variant="ghost"
+                  title="Prohodit role všech replik (Lékař ↔ Pacient)"
+                >
+                  <ArrowLeftRight className="size-3.5" />
+                </Button>
+              )}
+              <span className="text-[10px] text-muted-foreground/60 tabular-nums">
+                {formatDuration(durationMs)}
+              </span>
+            </div>
           </div>
           <ScrollArea className="flex-1" scrollFade>
             <div className="px-2 pb-4 text-[0.8rem] opacity-80">
@@ -101,6 +118,7 @@ export function ReviewScreen({
                 onRequestSuggestion={onRequestSuggestion}
                 onAcceptSuggestion={onAcceptSuggestion}
                 onDismissSuggestion={onDismissSuggestion}
+                onToggleSpeaker={onToggleSpeaker}
               />
             </div>
           </ScrollArea>

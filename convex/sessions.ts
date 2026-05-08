@@ -134,6 +134,37 @@ export const replaceTranscript = mutation({
   },
 });
 
+// Flip a single transcript entry's speaker (doctor ↔ patient).
+// Used when the user manually corrects a misclassified line.
+export const toggleEntrySpeaker = mutation({
+  args: { id: v.id("sessions"), entryId: v.string() },
+  handler: async (ctx, { id, entryId }) => {
+    const session = await ctx.db.get(id);
+    if (!session) throw new Error("Session not found");
+    const transcript = session.transcript.map((e) =>
+      e.id === entryId
+        ? { ...e, speaker: e.speaker === "doctor" ? "patient" : "doctor" }
+        : e
+    );
+    await ctx.db.patch(id, { transcript });
+  },
+});
+
+// Flip every entry's speaker. Used when diarization labeled the entire
+// transcript inverted (e.g., patient happened to speak first).
+export const swapAllSpeakers = mutation({
+  args: { id: v.id("sessions") },
+  handler: async (ctx, { id }) => {
+    const session = await ctx.db.get(id);
+    if (!session) throw new Error("Session not found");
+    const transcript = session.transcript.map((e) => ({
+      ...e,
+      speaker: e.speaker === "doctor" ? "patient" : "doctor",
+    }));
+    await ctx.db.patch(id, { transcript });
+  },
+});
+
 export const updateStatus = mutation({
   args: {
     id: v.id("sessions"),

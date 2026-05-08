@@ -8,7 +8,7 @@ import { exportToDocx } from "@/lib/export-docx";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TemplateSelector } from "@/components/TemplateSelector";
+import { TemplateSelector, type ResolvedTemplate } from "@/components/TemplateSelector";
 import { Sparkles, Save, RotateCcw, Pencil, Eye, Download } from "lucide-react";
 
 interface NoteEditorProps {
@@ -27,20 +27,26 @@ export function NoteEditor({
   onSave,
 }: NoteEditorProps) {
   const [templateId, setTemplateId] = useState(savedTemplateId);
+  const [resolved, setResolved] = useState<ResolvedTemplate | null>(null);
   const [note, setNote] = useState(savedNote);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleGenerate = async (tid?: string) => {
-    const id = tid || templateId;
+  const handleGenerate = async (override?: ResolvedTemplate) => {
+    const target = override ?? resolved;
     setIsGenerating(true);
     setError(null);
     try {
       const res = await fetch("/api/ai/generate-note", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript, templateId: id }),
+        body: JSON.stringify({
+          transcript,
+          templateId: target?.id ?? templateId,
+          systemPrompt: target?.customSystemPrompt,
+          templateName: target?.name,
+        }),
       });
       if (!res.ok) throw new Error("Generování selhalo");
       const data = await res.json();
@@ -53,9 +59,10 @@ export function NoteEditor({
     }
   };
 
-  const handleTemplateChange = (id: string) => {
+  const handleTemplateChange = (id: string, t: ResolvedTemplate) => {
     setTemplateId(id);
-    if (note) handleGenerate(id);
+    setResolved(t);
+    if (note) handleGenerate(t);
   };
 
   const handleSave = () => {

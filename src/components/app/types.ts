@@ -5,6 +5,7 @@ export type AppView =
   | "patients"
   | "patient"
   | "sessions"
+  | "templates"
   | "idle"
   | "recording"
   | "review";

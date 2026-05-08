@@ -2,7 +2,7 @@
 
 import { UserButton, useUser } from "@clerk/nextjs";
 import { motion } from "motion/react";
-import { LayoutDashboard, Users, FileAudio } from "lucide-react";
+import { LayoutDashboard, Users, FileAudio, FileText } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -32,6 +32,7 @@ const nav = [
   { id: "dashboard" as const, label: "Přehled", icon: LayoutDashboard },
   { id: "patients" as const, label: "Pacienti", icon: Users },
   { id: "sessions" as const, label: "Relace", icon: FileAudio },
+  { id: "templates" as const, label: "Šablony", icon: FileText },
 ];
 
 export function AppShell({

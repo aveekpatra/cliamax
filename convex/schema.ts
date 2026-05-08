@@ -47,4 +47,18 @@ export default defineSchema({
   })
     .index("by_patient", ["patientId"])
     .index("by_reviewStatus", ["reviewStatus"]),
+
+  // Doctor-uploaded note templates. Parsed from .docx upload client-side
+  // (via mammoth) into plain text, then turned into a system prompt the
+  // generate-note route can use as the structure for AI output.
+  templates: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    /** Plain-text version of the uploaded .docx (markdown-ish). */
+    content: v.string(),
+    /** Pre-built system prompt to send to the LLM. */
+    systemPrompt: v.string(),
+    originalFileName: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_createdAt", ["createdAt"]),
 });

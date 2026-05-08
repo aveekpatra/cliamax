@@ -10,6 +10,7 @@
 
 import type * as patients from "../patients.js";
 import type * as sessions from "../sessions.js";
+import type * as templates from "../templates.js";
 
 import type {
   ApiFromModules,
@@ -20,6 +21,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   patients: typeof patients;
   sessions: typeof sessions;
+  templates: typeof templates;
 }>;
 
 /**
