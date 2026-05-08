@@ -143,6 +143,11 @@ export function NoteEditor({
                 onChange={(e) => setNote(e.target.value)}
                 className="text-sm min-h-[400px] font-mono"
               />
+            ) : isHtmlNote(note) ? (
+              <div
+                className="docx-preview text-sm"
+                dangerouslySetInnerHTML={{ __html: cleanHtmlOutput(note) }}
+              />
             ) : (
               <div className="markdown-note">
                 <ReactMarkdown>{note}</ReactMarkdown>
@@ -212,4 +217,23 @@ function formatDuration(ms: number): string {
   const secs = Math.floor((ms % 60000) / 1000);
   if (mins === 0) return `${secs}s`;
   return `${mins}m ${secs.toString().padStart(2, "0")}s`;
+}
+
+/**
+ * Custom-template notes are HTML; built-in templates are markdown.
+ * Heuristic: if the first non-whitespace character is `<`, treat as HTML.
+ */
+function isHtmlNote(note: string): boolean {
+  return /^\s*<\w/.test(note);
+}
+
+/**
+ * The model sometimes wraps HTML output in markdown fences despite the
+ * system prompt forbidding it. Strip them defensively before rendering.
+ */
+function cleanHtmlOutput(note: string): string {
+  return note
+    .replace(/^\s*```(?:html)?\s*\n/i, "")
+    .replace(/\n```\s*$/i, "")
+    .trim();
 }

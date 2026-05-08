@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { FileText, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
+import { Code2, FileText, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -52,10 +52,21 @@ export function TemplatesView() {
     content: string;
     originalFileName?: string;
   } | null>(null);
+  const [showSource, setShowSource] = useState(false);
   const [deleteId, setDeleteId] = useState<TemplateId | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+
+  const BLANK_HTML = `<h2>Anamnéza</h2>
+<p>[Anamnéza pacienta]</p>
+<h2>Vyšetření</h2>
+<p>[Nálezy z vyšetření]</p>
+<h2>Diagnóza</h2>
+<p>[Diagnóza]</p>
+<h2>Plán</h2>
+<p>[Léčebný plán]</p>`;
 
   const handleUploadClick = () => {
     setUploadError(null);
@@ -93,7 +104,8 @@ export function TemplatesView() {
   };
 
   const handleNewBlank = () => {
-    setEditing({ name: "", description: "", content: "" });
+    setEditing({ name: "", description: "", content: BLANK_HTML });
+    setShowSource(false);
     setEditorOpen(true);
   };
 
@@ -105,7 +117,40 @@ export function TemplatesView() {
       content: t.content,
       originalFileName: t.originalFileName,
     });
+    setShowSource(false);
     setEditorOpen(true);
+  };
+
+  // Replace the structure of the currently-editing template with a fresh
+  // .docx upload. Keeps the name/description in place so the doctor can
+  // swap underlying structure without retyping metadata.
+  const handleReplaceFile = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !editing) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/templates/parse-docx", {
+        method: "POST",
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Parsování selhalo");
+      setEditing({
+        ...editing,
+        content: data.content ?? "",
+        originalFileName: data.originalFileName,
+      });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Parsování selhalo");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleSave = async () => {
@@ -310,20 +355,69 @@ export function TemplatesView() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground/80">
-                  Struktura šablony
-                </label>
-                <Textarea
-                  value={editing.content}
-                  onChange={(e) =>
-                    setEditing({ ...editing, content: e.target.value })
-                  }
-                  className="min-h-[280px] font-mono text-xs"
-                  placeholder={"## Anamnéza\n[…]\n\n## Vyšetření\n[…]\n\n## Diagnóza\n[…]\n\n## Plán\n[…]"}
-                />
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-muted-foreground/80">
+                    Struktura šablony
+                    {editing.originalFileName && (
+                      <span className="ml-2 font-normal text-muted-foreground/60">
+                        · {editing.originalFileName}
+                      </span>
+                    )}
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <input
+                      ref={replaceInputRef}
+                      type="file"
+                      accept=".docx"
+                      onChange={handleReplaceFile}
+                      className="hidden"
+                    />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="gap-1.5 text-xs"
+                      onClick={() => replaceInputRef.current?.click()}
+                      disabled={uploading}
+                      type="button"
+                    >
+                      <Upload className="size-3" />
+                      {uploading ? "Nahrávám…" : "Nahradit .docx"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="gap-1.5 text-xs"
+                      onClick={() => setShowSource((s) => !s)}
+                      type="button"
+                    >
+                      <Code2 className="size-3" />
+                      {showSource ? "Náhled" : "Zdroj"}
+                    </Button>
+                  </div>
+                </div>
+
+                {uploadError && (
+                  <p className="text-xs text-destructive">{uploadError}</p>
+                )}
+
+                {showSource ? (
+                  <Textarea
+                    value={editing.content}
+                    onChange={(e) =>
+                      setEditing({ ...editing, content: e.target.value })
+                    }
+                    className="min-h-[320px] font-mono text-[11px]"
+                    placeholder="<h2>Sekce</h2>\n<p>[Obsah]</p>"
+                  />
+                ) : (
+                  <div
+                    className="docx-preview min-h-[320px] max-h-[420px] overflow-auto rounded-lg border bg-card p-5 text-sm"
+                    dangerouslySetInnerHTML={{ __html: editing.content }}
+                  />
+                )}
                 <p className="text-[11px] text-muted-foreground/60">
-                  Tip: Použijte nadpisy (## Sekce) a hranaté závorky [...] pro
-                  zástupné texty. AI doplní obsah z přepisu.
+                  AI nahradí placeholdery v hranatých závorkách [...] obsahem
+                  z rozhovoru a zachová strukturu šablony.
                 </p>
               </div>
             </DialogPanel>

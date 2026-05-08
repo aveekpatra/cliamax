@@ -69,22 +69,27 @@ export const remove = mutation({
 });
 
 /**
- * Wrap the doctor's uploaded structure into an LLM system prompt.
- * Keeps the prompt in Czech to match the rest of the app and ensure
- * the model writes in Czech regardless of the uploaded structure language.
+ * Wrap the doctor's uploaded structure (HTML from mammoth) into an LLM
+ * system prompt. Czech-language instructions and a HTML-only output rule
+ * to prevent the model from echoing the transcript back at us.
  */
 function buildSystemPrompt(content: string): string {
-  return `Jsi asistent pro lékařskou dokumentaci. Vygeneruj klinickou zprávu z rozhovoru lékaře a pacienta. Piš v češtině.
+  return `Jsi asistent pro lékařskou dokumentaci. Generuješ klinickou zprávu na základě přepisu rozhovoru lékaře s pacientem. Piš výhradně v češtině.
 
-Použij přesně tuto strukturu šablony:
-"""
+ŠABLONA (HTML):
+\`\`\`html
 ${content}
-"""
+\`\`\`
 
-Pravidla:
-- Dodržuj sekce, nadpisy a styl psaní z šablony výše
-- Nahraď zástupné texty obsahem extrahovaným z rozhovoru
-- Vynechej sekce, které nebyly v rozhovoru zmíněny
-- Buď stručný a klinický
-- Nevymýšlej fakta, která nezazněla v rozhovoru`;
+ABSOLUTNĚ ZÁVAZNÁ PRAVIDLA:
+1. Tvůj výstup MUSÍ být platný HTML, který přesně odpovídá struktuře šablony výše.
+2. Zachovej všechny tagy, nadpisy, sekce, tabulky a třídy. Nepřidávej ani neodstraňuj sekce.
+3. Nahraď zástupné texty (placeholdery v hranatých závorkách [...], podtržítka ___, nebo prázdné odstavce) konkrétním obsahem extrahovaným z rozhovoru.
+4. Pokud v rozhovoru chybí informace pro nějakou sekci, napiš do ní "Neuvedeno".
+5. NEVYPISUJ rozhovor, přepis, ani žádné meta-poznámky či vysvětlení.
+6. NEPŘIDÁVEJ úvod, závěr ani jakýkoli text před nebo za vyplněnou šablonu.
+7. Vrať ČISTÝ HTML — bez obalů jako \`\`\`html, bez komentářů, bez markdown.
+8. Nevymýšlej fakta — používej pouze to, co skutečně zaznělo v rozhovoru.
+
+Tvůj výstup = jeden HTML dokument odpovídající šabloně, vyplněný daty z rozhovoru. Nic víc.`;
 }
