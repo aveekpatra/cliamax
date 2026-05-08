@@ -1,17 +1,21 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
-import { Geist, Geist_Mono, Inter } from "next/font/google";
+import { Geist, Geist_Mono, Inter, Montserrat } from "next/font/google";
 import ConvexClientProvider from "./ConvexClientProvider";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
-const interHeading = Inter({ subsets: ["latin"], variable: "--font-heading" });
+const montserrat = Montserrat({
+  subsets: ["latin"],
+  variable: "--font-heading",
+  weight: ["500", "600", "700"],
+});
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Claimax",
+  title: "Medscribe",
   description: "Asistent pro lékařský přepis",
 };
 
@@ -24,12 +28,13 @@ export default function RootLayout({
     <ClerkProvider>
       <html
         lang="en"
+        suppressHydrationWarning
         className={cn(
           "h-full antialiased",
           geistSans.variable,
           geistMono.variable,
           inter.variable,
-          interHeading.variable,
+          montserrat.variable,
           "font-sans"
         )}
       >

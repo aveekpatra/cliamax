@@ -76,37 +76,57 @@ export function BillingCodes({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground/50 uppercase tracking-wider">
-          Navržené výkony
-        </span>
-        <div className="flex items-center gap-2">
-          {hasDetected && (
-            <Button
-              onClick={detect}
-              size="sm"
-              variant="ghost"
-              className="gap-1 text-xs text-muted-foreground/50"
-              disabled={isLoading}
-            >
-              <RotateCcw className="size-3" />
-              Znovu detekovat
-            </Button>
-          )}
-        </div>
+      <div className="flex items-center justify-end">
+        <Button
+          onClick={detect}
+          size="sm"
+          variant="ghost"
+          className="gap-1.5 text-muted-foreground"
+          disabled={isLoading || transcript.length === 0}
+        >
+          <RotateCcw className="size-3.5" />
+          Detekovat znovu
+        </Button>
       </div>
 
       {error && <p className="text-xs text-destructive">{error}</p>}
 
       {isLoading ? (
         <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground/50">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground/70">
             <Sparkles className="size-3 animate-pulse" />
-            Analyzuji rozhovor...
+            Analyzuji rozhovor…
           </div>
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-3/4" />
+        </div>
+      ) : activeCodes.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 py-4 text-center">
+          <p className="text-sm text-muted-foreground/70">
+            {hasDetected
+              ? "Z rozhovoru nebyly detekovány žádné výkony."
+              : "Spusťte detekci výkonů z rozhovoru."}
+          </p>
+          <Button
+            onClick={detect}
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            disabled={transcript.length === 0}
+          >
+            {hasDetected ? (
+              <>
+                <RotateCcw className="size-3.5" />
+                Detekovat znovu
+              </>
+            ) : (
+              <>
+                <Sparkles className="size-3.5" />
+                Detekovat výkony
+              </>
+            )}
+          </Button>
         </div>
       ) : (
         <>
@@ -114,7 +134,7 @@ export function BillingCodes({
             {activeCodes.map((c, i) => (
               <motion.div
                 key={c.code}
-                className="flex items-start gap-3 rounded-lg border bg-card p-3"
+                className="flex items-start gap-3 rounded-lg border bg-background p-3"
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, x: -10, height: 0, padding: 0, margin: 0 }}
@@ -125,15 +145,15 @@ export function BillingCodes({
                 </Badge>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{c.name}</p>
-                  <p className="text-xs text-muted-foreground/60 mt-0.5">{c.reason}</p>
+                  <p className="text-xs text-muted-foreground/70 mt-0.5">{c.reason}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs text-muted-foreground/50 tabular-nums">
+                  <span className="text-xs text-muted-foreground/70 tabular-nums">
                     {c.points}b
                   </span>
                   <button
                     onClick={() => removeCode(c.code)}
-                    className="text-muted-foreground/30 hover:text-destructive transition-colors"
+                    className="text-muted-foreground/45 hover:text-destructive transition-colors"
                   >
                     <X className="size-3.5" />
                   </button>
@@ -142,35 +162,30 @@ export function BillingCodes({
             ))}
           </AnimatePresence>
 
-          {activeCodes.length > 0 && (
-            <motion.div
-              className="flex items-center justify-between pt-1"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
-            >
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground/50">
-                <Check className="size-3" />
-                {activeCodes.length} {activeCodes.length === 1 ? "výkon vybrán" : "výkony vybrány"}
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-medium tabular-nums">
-                  {totalPoints} b celkem
-                </span>
-                {onSave && (
-                  <Button onClick={handleSave} size="sm" variant="outline" className="gap-1.5">
-                    Uložit výkony
-                  </Button>
-                )}
-              </div>
-            </motion.div>
-          )}
-
-          {hasDetected && activeCodes.length === 0 && !isLoading && (
-            <p className="text-sm text-muted-foreground/40 text-center py-4">
-              Z rozhovoru nebyly detekovány žádné výkony.
-            </p>
-          )}
+          <motion.div
+            className="flex items-center justify-between pt-1"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+          >
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
+              <Check className="size-3" />
+              {activeCodes.length}{" "}
+              {activeCodes.length === 1 ? "výkon vybrán" : "výkony vybrány"}
+              <span className="text-muted-foreground/40">·</span>
+              <span className="tabular-nums">{totalPoints} b celkem</span>
+            </div>
+            {onSave && (
+              <Button
+                onClick={handleSave}
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+              >
+                Uložit výkony
+              </Button>
+            )}
+          </motion.div>
         </>
       )}
     </div>

@@ -33,8 +33,8 @@ export async function chat(
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://claimax.app",
-      "X-OpenRouter-Title": "Claimax Medical Transcription",
+      "HTTP-Referer": "https://medscribe.app",
+      "X-OpenRouter-Title": "Medscribe Medical Transcription",
     },
     body: JSON.stringify({
       model: options.model || MODEL,

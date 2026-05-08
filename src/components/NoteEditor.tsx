@@ -76,12 +76,14 @@ export function NoteEditor({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <TemplateSelector
-          value={templateId}
-          onChange={handleTemplateChange}
-          disabled={isGenerating}
-        />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <TemplateSelector
+            value={templateId}
+            onChange={handleTemplateChange}
+            disabled={isGenerating}
+          />
+        </div>
         {!note && !isGenerating && (
           <Button
             onClick={() => handleGenerate()}
@@ -135,7 +137,7 @@ export function NoteEditor({
                 className="text-sm min-h-[400px] font-mono"
               />
             ) : (
-              <div className="markdown-note rounded-lg border bg-card p-5">
+              <div className="markdown-note">
                 <ReactMarkdown>{note}</ReactMarkdown>
               </div>
             )}

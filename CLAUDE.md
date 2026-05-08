@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Cliamax is a medical transcription app for Czech healthcare providers. It captures doctor-patient conversations via real-time speech-to-text (Deepgram), applies AI-powered transcript correction (OpenRouter/GPT), and generates clinical notes in standard formats (SOAP, progress notes, prescriptions, H&P). The entire UI and all LLM prompts are in Czech.
+Medscribe is a medical transcription app for Czech healthcare providers. It captures doctor-patient conversations via real-time speech-to-text (Deepgram), applies AI-powered transcript correction (OpenRouter/GPT), and generates clinical notes in standard formats (SOAP, progress notes, prescriptions, H&P). The entire UI and all LLM prompts are in Czech.
 
 ## Tech Stack
 
